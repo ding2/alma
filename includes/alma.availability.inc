@@ -17,8 +17,8 @@ function alma_availability_holdings($provider_ids) {
         'show_reservation_button' => $record['show_reservation_button'],
         'reserved_count' => (int) $record['reservation_count'],
         'deferred_period' => FALSE,
-
-	'is_periodical' => ($record['media_class'] == 'periodical'),
+        'is_periodical' => ($record['media_class'] == 'periodical'),
+        'is_internet' => ($record['media_class'] == 'internet'),
       );
 
       $total = $total_reservable = 0;
