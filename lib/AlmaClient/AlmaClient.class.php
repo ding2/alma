@@ -70,13 +70,15 @@ class AlmaClient {
       // Log the request
       watchdog('alma', 'Sent request: @url (@seconds s)', array('@url' => url($this->base_url . $method, array('query' => $params)), '@seconds' => $seconds), WATCHDOG_DEBUG);
     }
-
+    
     if ($request->code == 200) {
       // Since we currently have no need for the more advanced stuff
       // SimpleXML provides, we'll just use DOM, since that is a lot
       // faster in most cases.
       $doc = new DOMDocument();
       $doc->loadXML($request->data);
+      // $doc->formatOutput = true;
+      // b14kpr(3, $doc->saveXML());
       if (!$check_status || $doc->getElementsByTagName('status')->item(0)->getAttribute('value') == 'ok') {
         return $doc;
       }
@@ -256,6 +258,7 @@ class AlmaClient {
       'addresses' => array(),
       'mails' => array(),
       'phones' => array(),
+      'category' => $info->getAttribute('patronCategory'),
     );
 
     foreach ($info->getElementsByTagName('address') as $address) {
@@ -321,6 +324,7 @@ class AlmaClient {
       $reservation = array(
         'id' => $item->getAttribute('id'),
         'status' => $item->getAttribute('status'),
+        'deletable' => $item->getAttribute('isDeletable'),
         'pickup_branch' => $item->getAttribute('reservationPickUpBranch'),
         'create_date' => $item->getAttribute('createDate'),
         'valid_from' => $item->getAttribute('validFromDate'),
@@ -358,6 +362,38 @@ class AlmaClient {
    */
   public function get_loans($borr_card, $pin_code) {
     $doc = $this->request('patron/loans', array('borrCard' => $borr_card, 'pinCode' => $pin_code));
+    
+    $loans = array();
+    foreach ($doc->getElementsByTagName('loan') as $item) {
+      $id = $item->getAttribute('id');
+      $loan = array(
+        'id' => $id,
+        'branch' => $item->getAttribute('loanBranch'),
+        'loan_date' => $item->getAttribute('loanDate'),
+        'due_date' => $item->getAttribute('loanDueDate'),
+        'remaining_renewals' => $item->getAttribute('remainingRenewals'),
+        'is_renewable' => ($item->getElementsByTagName('loanIsRenewable')->item(0)->getAttribute('value') == 'yes') ? TRUE : FALSE,
+        'renewal_status' => $item->getAttribute('renewalStatus'),
+        'record_id' => $item->getElementsByTagName('catalogueRecord')->item(0)->getAttribute('id'),
+        'record_available' => $item->getElementsByTagName('catalogueRecord')->item(0)->getAttribute('isAvailable'),
+      );
+      if ($item->getElementsByTagName('note')->length > 0) {
+        $loan['notes'] = $item->getElementsByTagName('note')->item(0)->getAttribute('value');
+      }
+      if($item->getElementsByTagName('loanIsRenewable')->item(0)->getAttribute('value') == 'no') {
+        $loan['message'] = $item->getElementsByTagName('loanIsRenewable')->item(0)->getAttribute('message');
+      }
+      $loans[$id] = $loan;
+    }
+    uasort($loans, 'AlmaClient::loan_sort');
+    return $loans;
+  }
+  
+  /**
+   * Get patron's overdue loans.
+   */
+  public function get_overdue_loans($borr_card, $pin_code) {
+    $doc = $this->request('patron/loans/overdue', array('borrCard' => $borr_card, 'pinCode' => $pin_code));
 
     $loans = array();
     foreach ($doc->getElementsByTagName('loan') as $item) {
@@ -370,6 +406,8 @@ class AlmaClient {
         'is_renewable' => ($item->getElementsByTagName('loanIsRenewable')->item(0)->getAttribute('value') == 'yes') ? TRUE : FALSE,
         'record_id' => $item->getElementsByTagName('catalogueRecord')->item(0)->getAttribute('id'),
         'record_available' => $item->getElementsByTagName('catalogueRecord')->item(0)->getAttribute('isAvailable'),
+        'renewalCost' => $item->getAttribute('renewalCost'),
+        'renewalStatus' => $item->getAttribute('renewalStatus'),
       );
       if ($item->getElementsByTagName('note')->length > 0) {
         $loan['notes'] = $item->getElementsByTagName('note')->item(0)->getAttribute('value');
@@ -386,13 +424,45 @@ class AlmaClient {
   private static function loan_sort($a, $b) {
     return strcmp($a['due_date'], $b['due_date']);
   }
+  
+  /**
+   * Change a consent.
+   */
+  public function change_user_consent($borr_card, $pin_code, $category) {
+    // Initialise the query parameters with the current value from the
+    // reservation array.
+    $params = array(
+      'borrCard' => $borr_card,
+      'pinCode' => $pin_code,
+      'patronCategory' => $category,
+    );
+    
+    try {
+      $doc = $this->request('patron/category/change', $params);
+      $res_status = $doc->getElementsByTagName('status')->item(0)->getAttribute('value');
+      // Return error code when patron is blocked.
+      if ($res_status == 'consentBlocked') {
+        return ALMA_AUTH_BLOCKED;
+      }
 
+      // General catchall if status is not okay is to report failure.
+      if ($res_status == 'concentNotOk') {
+        return FALSE;
+      }
+    }
+    catch (AlmaClientConsentNotFound $e) {
+      return FALSE;
+    }
+
+    return $res_status;
+  }
+  
   /**
    * Get patron's debts.
    */
   public function get_debts($borr_card, $pin_code) {
     $doc = $this->request('patron/debts', array('borrCard' => $borr_card, 'pinCode' => $pin_code));
-
+    
     $data = array(
       'total_formatted' => 0,
       'debts' => array(),
@@ -532,13 +602,9 @@ class AlmaClient {
           //Even if this is not the case any error in the current renewal is irrelevant
           //as the loan has previously been renewed so don't report it as such
           if ($message == 'isRenewedToday' || $renewable == 'yes') {
-            $reservations[$id] = TRUE; 
-          } elseif ($message == 'maxNofRenewals') {
-            $reservations[$id] = t('Maximum number of renewals reached');
-          } elseif ($message == 'copyIsReserved') {
-            $reservations[$id] = t('The material is reserved by another loaner');
+            $reservations[$id] = TRUE;
           } else {
-            $reservations[$id] = t('Unable to renew material');
+            $reservations[$id] = $message;
           }
         }
       }
@@ -646,9 +712,9 @@ class AlmaClient {
   /**
    * Get details about one or more catalogue record.
    */
-  public function catalogue_record_detail($alma_ids) {
+  public function catalogue_record_detail($alma_id) {
     $params = array(
-      'catalogueRecordKey' => $alma_ids,
+      'catalogueRecordKey' => $alma_id,
     );
     $doc = $this->request('catalogue/detail', $params, FALSE);
     $data = array(
@@ -877,6 +943,8 @@ class AlmaClient {
     );
 
     $doc = $this->request('patron/absentPeriod/change', $params);
+    $doc->formatOutput = TRUE;
+    b14dpm(3, $doc->saveXML());
     return TRUE;
   }
 
