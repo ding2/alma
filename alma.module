@@ -540,6 +540,7 @@ function alma_update_provider( $changes, $profile2 ) {
       !empty($changes['reservation_pause_stop'])) {
     
     try{
+      // Hack. In order to retrieve current absent id 
       $ext_info = alma_client_invoke('get_patron_info', $creds['name'], $creds['pass'], TRUE);
     }
     catch (Exception $e){
