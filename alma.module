@@ -236,36 +236,37 @@ function alma_get_organisation($reset = FALSE) {
  * Implements hook_user_view
  */
 function alma_user_view( $account, $view_mode, $langcode ) {
-  module_load_include('inc', 'alma', 'includes/alma.user');
-  $creds = ding_user_get_creds($account);
-  if (isset($creds) && ($userInfo =  alma_user_info($creds)) && isset($userInfo)) {
-    foreach ($userInfo as $key=>$prop) {
-      $data[$key] = isset($prop) ? $prop : '';
-    }
-
-    $account->content['name'] = array(
-      '#type' => 'item',
-      '#title' => t('Name'),
-      '#markup' => $data['firstname'],
-    );
-
-    $address_parts = array($data['address']);   
-    if (!empty($data['postal']) || !empty($data['city'])) {
-      $address_parts[] = join('<br /> ', array_filter(array($data['postal'], $data['city'])));
-    }
-
-    // @todo: really, there should be a template for this.
-    $account->content['address'] = array(
-      '#type' => 'item',
-      '#title' => t('Address'),
-      '#markup' => '<p>' . join('<br />',$address_parts) . '</p>',
-    );
-    // @todo: add provider specific fields
-    alma_set_profile2_fields( $account );
-  };
+  if (ding_user_is_provider_user($account)) {
+    $creds = ding_user_get_creds($account);
+    
+    if ($creds && ($userInfo =  ding_provider_invoke('user', 'info', $creds)) && isset($userInfo)) {
+      foreach ($userInfo as $key => $prop) {
+        $data[$key] = isset($prop) ? $prop : '';
+      }
   
+      $account->content['name'] = array(
+        '#type' => 'item',
+        '#title' => t('Name'),
+        '#markup' => $data['firstname'],
+      );
+  
+      $address_parts = array($data['address']);
+      if (!empty($data['postal']) || !empty($data['city'])) {
+        $address_parts[] = join('<br /> ', array_filter(array($data['postal'], $data['city'])));
+      }
+  
+      // @todo: really, there should be a template for this.
+      $account->content['address'] = array(
+        '#type' => 'item',
+        '#title' => t('Address'),
+        '#markup' => '<p>' . join('<br />', $address_parts) . '</p>',
+      );
+      
+      // @todo: add provider specific fields
+      alma_set_profile2_fields($account);
+    };
+  }
 }
-
 
 function alma_set_profile2_fields($account) {
   if( !module_exists('profile2') ) {
@@ -478,7 +479,7 @@ function alma_profile2_presave($profile2) {
   
   // update provider
   if( isset($changes) ) {
-    alma_update_provider( $changes,$profile2 );
+    alma_update_provider($changes, $profile2);
   }  
 
 }
@@ -650,6 +651,7 @@ function alma_get_patron($creds = NULL, $reset = FALSE, $as_array = FALSE) {
       'branchName' => $organisation['branch'][$info['preferences']['patron_branch']],
       'absentPeriods' => isset($info['absent_periods']) ? $info['absent_periods'] : '',
       'category' => isset($info['category']) ? $info['category'] : '',
+      'allows' => isset($info['allows']) ? $info['allows'] : '',
     );
   }
   if( $as_array ) {

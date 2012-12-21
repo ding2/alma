@@ -309,7 +309,14 @@ class AlmaClient {
         'to_date' => $period->getAttribute('absentToDate'),
       );
     }
+    b14dpm(3, $data['absent_periods']);
 
+    foreach ($info->getElementsByTagName('patronAllow') as $allow) {
+      $data['allows'][$allow->getAttribute('allowType')] = array(
+        'date' => $allow->getAttribute('allowDate'),
+      );
+    }
+    
     return $data;
   }
 
@@ -426,22 +433,54 @@ class AlmaClient {
   }
   
   /**
-   * Change a consent.
+   * Add user consent.
    */
-  public function change_user_consent($borr_card, $pin_code, $category) {
+  public function add_user_concent($borr_card, $pin_code, $type) {
     // Initialise the query parameters with the current value from the
     // reservation array.
     $params = array(
       'borrCard' => $borr_card,
       'pinCode' => $pin_code,
-      'patronCategory' => $category,
+      'allowType' => $type,
     );
     
     try {
-      $doc = $this->request('patron/category/change', $params);
+      $doc = $this->request('patron/allow/add', $params);
       $res_status = $doc->getElementsByTagName('status')->item(0)->getAttribute('value');
       // Return error code when patron is blocked.
-      if ($res_status == 'consentBlocked') {
+      if ($res_status != 'ok') {
+        return ALMA_AUTH_BLOCKED;
+      }
+
+      // General catchall if status is not okay is to report failure.
+      if ($res_status == 'concentNotOk') {
+        return FALSE;
+      }
+    }
+    catch (AlmaClientConsentNotFound $e) {
+      return FALSE;
+    }
+
+    return $res_status;
+  }
+  
+  /**
+   * Remove user consent.
+   */
+  public function remove_user_concent($borr_card, $pin_code, $type) {
+    // Initialise the query parameters with the current value from the
+    // reservation array.
+    $params = array(
+      'borrCard' => $borr_card,
+      'pinCode' => $pin_code,
+      'allowType' => $type,
+    );
+    
+    try {
+      $doc = $this->request('patron/allow/remove', $params);
+      $res_status = $doc->getElementsByTagName('status')->item(0)->getAttribute('value');
+      // Return error code when patron is blocked.
+      if ($res_status != 'ok') {
         return ALMA_AUTH_BLOCKED;
       }
 

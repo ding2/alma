@@ -153,24 +153,25 @@ function _alma_set_rows($h) {
   
   foreach ($h as $key => $data) {
     $row = array();
-    $row['placement'] = $org['branch'][$data['branch_id']];
+    $row['placement'] = '';
+    if(isset($data['branch_id']))
+      $row['placement'] = $org['branch'][$data['branch_id']];
     
-    if(!empty($data['department_id'])){
+    if(isset($data['department_id']))
       $row['placement'] = $row['placement'] .' → '. $org['department'][$data['department_id']];
-    }
     
-    if(!empty($data['collection_id'])){
+    if(isset($data['collection_id']))
       $row['placement'] = $row['placement'] .' → '. $org['collection'][$data['collection_id']];
-    }
-    $row['copies'] = (int) $data['total_count'];
+    
+    $row['copies'] = isset($data['total_count']) ? (int) $data['total_count'] : 0;
     $copies_total += $row['copies'];
-    $row['home'] = (int) $data['available_count'];
+    $row['home'] = isset($data['available_count']) ? (int) $data['available_count'] : 0;
     $home_total += $row['home'];
-    $row['reference'] = (int) $data['reference_count'];
+    $row['reference'] = isset($data['reference_count']) ? (int) $data['reference_count'] : 0;
     $reference_total += $row['reference'];
-    $row['checked_out'] = (int) $data['checked_out_count'];
+    $row['checked_out'] = isset($data['checked_out_count']) ? (int) $data['checked_out_count'] : 0;
     $checked_out_total += $row['checked_out'];
-    $row['reservations'] = (int) $data['ordered_count'];
+    $row['reservations'] = isset($data['ordered_count']) ? (int) $data['ordered_count'] : 0;
     $reservations_total += $row['reservations'];
     $rows[] = $row; 
   }

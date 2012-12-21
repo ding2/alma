@@ -31,17 +31,18 @@ function alma_user_consent_info() {
  *
  * @return $status Boolean
  */
-function alma_user_consent_update($account, $consent, $previous_consents) {
+function alma_user_consent_add($account, $consent, $previous_consents) {
   switch($consent) {
     case 'loan_history_store':
       $creds = ding_user_get_creds($account);
       $patron = alma_get_patron($creds);
       if (isset($patron->category)) {
         // Changes mapped from the category structure in Axiell.
-        $new_category = alma_user_consent_get_category_change($patron->category);
+        $new_category = alma_user_consent_get_category_change($consent);
         // Alma do not return a status.
-        $res = alma_client_invoke('change_user_consent', $creds['name'], $creds['pass'], $new_category);
-        return TRUE;
+        b14dpm(3, $new_category);
+        $res = alma_client_invoke('add_user_concent', $creds['name'], $creds['pass'], $new_category);
+        return ($res == 'ok');
       }
       break;
   }
@@ -65,10 +66,10 @@ function alma_user_consent_remove($account, $consent, $previous_consents) {
       $patron = alma_get_patron($creds);
       if (isset($patron->category)) {
         // Changes mapped from the category structure in Axiell.
-        $new_category = alma_user_consent_get_category_change($patron->category, TRUE);
+        $new_category = alma_user_consent_get_category_change($consent);
         // Alma do not return a status.
-        $res = alma_client_invoke('change_user_consent', $creds['name'], $creds['pass'], $new_category);
-        return TRUE;
+        $res = alma_client_invoke('remove_user_concent', $creds['name'], $creds['pass'], $new_category);
+        return ($res == 'ok');
       }
       break;
   }
@@ -89,15 +90,22 @@ function alma_user_consent_remove($account, $consent, $previous_consents) {
  * @return $alma_user_consent Array
  */
 function alma_user_consent_get_consent($account) {
-  $creds = ding_user_get_creds($account);
-  $patron = alma_get_patron($creds);
+  try{
+    $creds = ding_user_get_creds($account);
+  }
+  catch (DingProviderAuthException $e) {
+    return NULL;
+  }
+  $patron = alma_get_patron($creds, TRUE);
   if(ding_user_is_provider_user($account)) {
     $consents = alma_user_consent_info();
     $return = array();
     foreach($consents as $id => $values) {
-      $loaner_cats = alma_user_consent_get_loaner_categories();
-      
-      $return[$id] = (in_array($patron->category, $loaner_cats)) ? 1 : 0;
+      $new_category = alma_user_consent_get_category_change($id);
+      if(isset($patron->allows))
+        $return[$id] = isset($patron->allows[$new_category]);
+      else
+        $return[$id] = 0;
     }
     return $return;
   }
@@ -105,35 +113,15 @@ function alma_user_consent_get_consent($account) {
 
 /**
  * Get the category which matches the current when changing.
+ * @alma currently only supports one type of consent.
  *
- * @param $category Number
- * @param $reset Boolean
+ * @param $category String
  *
- * @return Number
+ * @return String
  */
-function alma_user_consent_get_category_change($category, $reset = FALSE) {
-  $changes = alma_user_consent_get_loaner_categories();
-  if($reset) {
-    $changes = array_flip($changes);
-  }
-  return (isset($changes[$category])) ? $changes[$category] : 0;
-}
-
-/*
- * Temporary array of loaner categories with or without consent
- * This will soon be deprecated
- */
-function alma_user_consent_get_loaner_categories() {
-  return array(
-    '01' => '71',
-    '02' => '72',
-    '04' => '74',
-    '05' => '75',
-    '07' => '24',
-    '08' => '25',
-    '09' => '26',
-    '10' => '27',
-    '19' => '28',
-    '20' => '29',
+function alma_user_consent_get_category_change($category) {
+  $consent_categories = array(
+    'loan_history_store' => 'keepLoan',
   );
+  return $consent_categories[$category];
 }
