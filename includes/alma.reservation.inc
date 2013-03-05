@@ -192,7 +192,13 @@ function alma_reservation_update_order($account, $id, $pickup_branch, $expiry_da
 function alma_reservation_delete($account, $id) {
   $creds = ding_user_get_creds($account);
   $reservations = alma_reservation_get_reservations($account);
-  
+  // Reject "ready for pickup" remote loan deletion.
+  if (variable_get('alma_disable_remoteloan_deletion', TRUE)) {
+    if ($id < 0 && isset($reservations[$id]['pickup_number'])) {
+      drupal_set_message(t('Deletion of "ready for pickup" remote loans are not allowed.'));
+      return FALSE;
+    }
+  }
   alma_reservation_clear_cache();
   if( isset($reservations[$id]) ) {
     return alma_client_invoke('remove_reservation', $creds['name'], $creds['pass'], $reservations[$id]);
