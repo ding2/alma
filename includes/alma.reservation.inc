@@ -195,7 +195,7 @@ function alma_reservation_delete($account, $id) {
   // Reject "ready for pickup" remote loan deletion.
   if (variable_get('alma_disable_remoteloan_deletion', TRUE)) {
     if ($id < 0 && isset($reservations[$id]['pickup_number'])) {
-      drupal_set_message(t('Deletion of "ready for pickup" remote loans are not allowed.'));
+      drupal_set_message(t('Deletion of "ready for pickup" remote loans are not allowed.'), 'warning');
       return FALSE;
     }
   }
