@@ -720,6 +720,9 @@ class AlmaClient {
           $year = $year_holdings->getAttribute('value');
           foreach ($year_holdings->childNodes as $issue_holdings) {
             $issue = $issue_holdings->getAttribute('value');
+            if (empty($issue)) {
+              $issue = '1';
+            }
             $holdings = AlmaClient::process_catalogue_record_holdings($issue_holdings);
             $record['holdings'][$year][$issue] = $holdings;
             $issue_list = array(
