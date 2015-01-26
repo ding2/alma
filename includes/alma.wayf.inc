@@ -10,13 +10,15 @@
  * Used to set the name and password to log into the library system after WAYF
  * login.
  */
-function alma_wayf_login_credentials($authentication_attributes) {
+function alma_wayf_login_credentials($attributes) {
   $hash = variable_get('wayf_hash', '');
   $credentials = array();
 
-  if ($hash) {
+  if ($hash && !empty($attributes['schacPersonalUniqueID'])) {
+    // Extract unique id form the WAYF attributes (the CPR number).
+    preg_match('/\d{10}$/', reset($attributes['schacPersonalUniqueID']), $uniqueID);
     $credentials = array(
-      'name' => $authentication_attributes['schacPersonalUniqueID'],
+      'name' => reset($uniqueID),
       'pass' => $hash,
     );
   }
