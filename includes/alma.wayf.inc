@@ -14,11 +14,9 @@ function alma_wayf_login_credentials($attributes) {
   $hash = variable_get('wayf_hash', '');
   $credentials = array();
 
-  if ($hash && !empty($attributes['schacPersonalUniqueID'])) {
-    // Extract unique id form the WAYF attributes (the CPR number).
-    preg_match('/\d{10}$/', reset($attributes['schacPersonalUniqueID']), $uniqueID);
+  if ($hash) {
     $credentials = array(
-      'name' => reset($uniqueID),
+      'name' => $attributes['schacPersonalUniqueID'],
       'pass' => $hash,
     );
   }
