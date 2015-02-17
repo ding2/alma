@@ -1009,6 +1009,7 @@ class AlmaClient {
       'name' => $name,
       'email' => $mail,
       'branch' => $branch,
+      'addr1' => '+++',
       'verified' => FALSE,
       'locale' => 'da_DK'
     );
